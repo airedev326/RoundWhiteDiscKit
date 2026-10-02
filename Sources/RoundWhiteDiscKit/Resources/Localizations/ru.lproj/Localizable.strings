@@ -1,0 +1,17 @@
+/* RoundWhiteDiscKit — user-facing strings (Russian).
+   Formal register (вы). */
+
+/* --- NFC system sheet --- */
+"Hold the TOP of your iPhone very close to the Sensor" = "Поднесите ВЕРХНЮЮ часть iPhone вплотную к сенсору";
+"Libre 3 NFC scan complete." = "NFC-сканирование Libre 3 завершено.";
+"Libre 3 sensor read." = "Сенсор Libre 3 считан.";
+"Libre 3 sensor activated." = "Сенсор Libre 3 активирован.";
+"Libre 3 receiver switched." = "Приёмник Libre 3 изменён.";
+"More than one tag detected." = "Обнаружено несколько меток.";
+
+/* --- Bluetooth errors --- */
+"Bluetooth unavailable" = "Bluetooth недоступен";
+"Bluetooth powered off" = "Bluetooth выключен";
+"Bluetooth permission denied" = "Нет разрешения на использование Bluetooth";
+"BLE connect failed: %@" = "Не удалось подключиться по BLE: %@";
+"BLE timeout: %@" = "Превышено время ожидания BLE: %@";

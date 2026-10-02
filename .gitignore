@@ -1,0 +1,14 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+
+# Sensor-specific local state must not be committed to the public repo.
+Libre3PatchContext.xml
+Libre3SensorState.json
+
+# Remote runtime-tables blob (Scripts/build_runtime_tables_blob.py); served to host apps, not committed.
+RemoteTables/

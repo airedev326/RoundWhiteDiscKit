@@ -1,0 +1,50 @@
+name: RoundWhiteDisc
+options:
+  bundleIdPrefix: org.roundwhitedisc
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    CODE_SIGN_STYLE: Automatic
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+packages:
+  RoundWhiteDiscKit:
+    path: ../..
+targets:
+  RoundWhiteDisc:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+        excludes:
+          - "Info.plist"
+          - "Resources/**"
+      # Stand-in for a remote fetch: bundle the runtime-tables blob when it has
+      # been built locally (Scripts/build_runtime_tables_blob.py).
+      - path: ../../RemoteTables/roundwhitedisckit-runtime-tables-v2.xz
+        buildPhase: resources
+        optional: true
+    dependencies:
+      - package: RoundWhiteDiscKit
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: RoundWhiteDisc
+        CFBundleIdentifier: org.roundwhitedisc.RoundWhiteDisc
+        UILaunchScreen: {}
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSBluetoothAlwaysUsageDescription: "RoundWhiteDisc needs Bluetooth to pair with and read your Libre 3 sensor."
+        NFCReaderUsageDescription: "RoundWhiteDisc uses NFC to scan and activate Libre 3 sensors."
+        UIBackgroundModes:
+          - bluetooth-central
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: Sources/RoundWhiteDisc.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: org.roundwhitedisc.RoundWhiteDisc
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Sources/Info.plist

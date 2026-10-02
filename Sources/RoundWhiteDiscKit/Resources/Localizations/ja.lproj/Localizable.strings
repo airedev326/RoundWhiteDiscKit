@@ -1,0 +1,18 @@
+/* RoundWhiteDiscKit — user-facing strings (Japanese).
+   Polite register (です・ます). Japanese has no capitalisation, so the emphasis
+   the English "TOP" carries is rendered lexically with 上部. */
+
+/* --- NFC system sheet --- */
+"Hold the TOP of your iPhone very close to the Sensor" = "iPhone の上部をセンサーにできるだけ近づけてください";
+"Libre 3 NFC scan complete." = "Libre 3 の NFC スキャンが完了しました。";
+"Libre 3 sensor read." = "Libre 3 センサーを読み取りました。";
+"Libre 3 sensor activated." = "Libre 3 センサーを有効化しました。";
+"Libre 3 receiver switched." = "Libre 3 の受信機を切り替えました。";
+"More than one tag detected." = "複数のタグが検出されました。";
+
+/* --- Bluetooth errors --- */
+"Bluetooth unavailable" = "Bluetooth を利用できません";
+"Bluetooth powered off" = "Bluetooth がオフになっています";
+"Bluetooth permission denied" = "Bluetooth の使用が許可されていません";
+"BLE connect failed: %@" = "BLE 接続に失敗しました: %@";
+"BLE timeout: %@" = "BLE がタイムアウトしました: %@";
