@@ -57,11 +57,7 @@ final class RemoteRuntimeTablesBlobTests: XCTestCase {
     }
 
     func testRejectsTamperedPayload() throws {
-        try installRuntimeTablesForTests()
-        let url = URL(fileURLWithPath: "\(#filePath)")
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("RemoteTables/roundwhitedisckit-runtime-tables-v2.xz")
-        let blob = try Data(contentsOf: url)
+        let blob = try runtimeTablesBlobForTests()
         var payload = try (blob as NSData).decompressed(using: .lzma) as Data
         XCTAssertNoThrow(try RemoteRuntimeTables.decode(blob))
 
