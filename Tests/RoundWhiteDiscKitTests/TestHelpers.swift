@@ -9,7 +9,7 @@ extension Data {
 }
 
 /// Reads the runtime-tables blob from $ROUNDWHITEDISCKIT_RUNTIME_TABLES, else
-/// RemoteTables/roundwhitedisckit-runtime-tables-v2.xz at the repo root (build it
+/// RemoteTables/roundwhitedisckit-runtime-tables-v3.xz at the repo root (build it
 /// with Scripts/build_runtime_tables_blob.py). Skips the test if it is absent.
 func runtimeTablesBlobForTests() throws -> Data {
     let url: URL
@@ -20,7 +20,7 @@ func runtimeTablesBlobForTests() throws -> Data {
             .deletingLastPathComponent()  // RoundWhiteDiscKitTests
             .deletingLastPathComponent()  // Tests
             .deletingLastPathComponent()  // repo root
-            .appendingPathComponent("RemoteTables/roundwhitedisckit-runtime-tables-v2.xz")
+            .appendingPathComponent("RemoteTables/roundwhitedisckit-runtime-tables-v3.xz")
     }
     guard let blob = try? Data(contentsOf: url) else {
         throw XCTSkip("runtime tables blob not found at \(url.path); run Scripts/build_runtime_tables_blob.py")

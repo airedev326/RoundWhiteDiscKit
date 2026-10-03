@@ -44,10 +44,10 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_TABLES_DIR = os.path.join(REPO, "RemoteTables", "source")
-DEFAULT_OUT = os.path.join(REPO, "RemoteTables", "roundwhitedisckit-runtime-tables-v2.xz")
+DEFAULT_OUT = os.path.join(REPO, "RemoteTables", "roundwhitedisckit-runtime-tables-v3.xz")
 
 MAGIC = b"RWDKTBL\0"
-VERSION = 2
+VERSION = 3
 SBOX19_PREFIX = 0x20001          # sbox19 starts 0x20001 bytes before sbox12_full in the library
 SBOX19_LEN = 0x80000
 SBOX12_LEN = 0x200000
@@ -55,7 +55,18 @@ TTABLE_B_EXT_LEN = 0x100000
 BYTECODE_IN_SBOX12 = 0x17F506    # 0xb25d20 - 0x9a681a
 BYTECODE_LEN = 413_696
 PATCH_TTABLE_B_EXT = 0
-PATCH_BYTECODE = 1
+
+# Tables removed with the child23 kAuth-import path (dead for fresh-pair + reconnect).
+# Listed so a stray leftover .bin in the source dir can't silently re-bloat the blob.
+EXCLUDE = {
+    "child23_71fb38_vm_desc_d84770", "child23_program_region_435cf0",
+    "child23_71fb38_vm_start_d843d0", "child23_static_table_71e870",
+    "child23_static_copy_code_71fca0", "gf_reduce_table_lib_23840c",
+    "bit_mask_table_lib_1267e0",
+    # removed with the white-box AES (aes_K) path:
+    "bytecode_lib_b25d20", "params_lib_22a1a0", "t5_seed_lib_b25708",
+    "singleton_4k", "phase2_pairs",
+}
 
 # The four overlapping tables + two more stored in the shared section, with the
 # SHA-256 of each original file. Every other .bin in the source dir is stored by name.
@@ -63,9 +74,6 @@ TABLES = {
     "sbox_19bit_lib_986819": "a81bbfaed9510a8f0fb1edb67f8f29d4ebf25119b2976eb948b37f5b1ddaf003",
     "sbox_12bit_full": "41208d43a503c443d605806f633b98e2cdcec44617d6a085e02718222f796c34",
     "child23_ttable_b_ext_976ea8_100000": "e22a373103902384e273a86fa5bb19b542620d1881228fa90df3a37bbe247328",
-    "bytecode_lib_b25d20": "fad53682e2b68022f1545757186283b94cab2a0c78a95b5402d74a32151f2592",
-    "child23_71fb38_vm_desc_d84770": "2d3d164afde9e212399e8e4e1016e84a8c6d44f7cc839cc6925cf4937764dbcb",
-    "child23_program_region_435cf0": "1dfb31c177f6e1dd8acf576c6a47ed3e6e12c8cd4c2571ce8deca4339222ba80",
 }
 
 
@@ -104,21 +112,16 @@ def build_payload(t):
     sbox12 = t["sbox_12bit_full"]
     if sbox19[SBOX19_PREFIX:] != sbox12[: SBOX19_LEN - SBOX19_PREFIX]:
         sys.exit("sbox19 tail no longer overlaps sbox12_full")
-    image = sbox19[:SBOX19_PREFIX] + sbox12
-    vm_desc = t["child23_71fb38_vm_desc_d84770"]
-    program = t["child23_program_region_435cf0"]
+    image = sbox19[:SBOX19_PREFIX] + sbox12[:TTABLE_B_EXT_LEN]
 
     patches = [(PATCH_TTABLE_B_EXT, off, b) for off, b in
                diff_runs(sbox12[:TTABLE_B_EXT_LEN], t["child23_ttable_b_ext_976ea8_100000"])]
-    patches += [(PATCH_BYTECODE, off, b) for off, b in
-                diff_runs(sbox12[BYTECODE_IN_SBOX12:BYTECODE_IN_SBOX12 + BYTECODE_LEN],
-                          t["bytecode_lib_b25d20"])]
 
-    named = sorted((n, d) for n, d in t.items() if n not in TABLES)
+    named = sorted((n, d) for n, d in t.items() if n not in TABLES and n not in EXCLUDE)
 
     out = bytearray(MAGIC)
-    out += struct.pack("<IIIIII", VERSION, len(image), len(vm_desc), len(program), len(patches), len(named))
-    out += image + vm_desc + program
+    out += struct.pack("<IIII", VERSION, len(image), len(patches), len(named))
+    out += image
     for target, off, b in patches:
         out += struct.pack("<BIH", target, off, len(b)) + b
     for name, data in named:
@@ -130,19 +133,15 @@ def build_payload(t):
 def expand_payload(p):
     """Reference decoder mirroring RuntimeTables.swift; used to self-check the blob."""
     assert p[:8] == MAGIC
-    version, image_len, vm_len, prog_len, n, named_count = struct.unpack_from("<IIIIII", p, 8)
+    version, image_len, n, named_count = struct.unpack_from("<IIII", p, 8)
     assert version == VERSION
-    pos = 32
+    pos = 24
     image = p[pos:pos + image_len]; pos += image_len
-    vm_desc = p[pos:pos + vm_len]; pos += vm_len
-    program = p[pos:pos + prog_len]; pos += prog_len
-    sbox12 = image[SBOX19_PREFIX:SBOX19_PREFIX + SBOX12_LEN]
-    ttb = bytearray(sbox12[:TTABLE_B_EXT_LEN])
-    bytecode = bytearray(sbox12[BYTECODE_IN_SBOX12:BYTECODE_IN_SBOX12 + BYTECODE_LEN])
+    ttb = bytearray(image[SBOX19_PREFIX:SBOX19_PREFIX + TTABLE_B_EXT_LEN])
     for _ in range(n):
         target, off, length = struct.unpack_from("<BIH", p, pos); pos += 7
-        dst = ttb if target == PATCH_TTABLE_B_EXT else bytecode
-        dst[off:off + length] = p[pos:pos + length]; pos += length
+        assert target == PATCH_TTABLE_B_EXT
+        ttb[off:off + length] = p[pos:pos + length]; pos += length
     named = {}
     for _ in range(named_count):
         (name_len,) = struct.unpack_from("<H", p, pos); pos += 2
@@ -152,11 +151,7 @@ def expand_payload(p):
     assert pos == len(p)
     return named | {
         "sbox_19bit_lib_986819": image[:SBOX19_LEN],
-        "sbox_12bit_full": sbox12,
         "child23_ttable_b_ext_976ea8_100000": bytes(ttb),
-        "bytecode_lib_b25d20": bytes(bytecode),
-        "child23_71fb38_vm_desc_d84770": vm_desc,
-        "child23_program_region_435cf0": program,
     }
 
 
@@ -172,8 +167,11 @@ def main():
     blob = lzma.compress(payload, format=lzma.FORMAT_XZ, check=lzma.CHECK_CRC32,
                          preset=9 | lzma.PRESET_EXTREME)
 
-    if expand_payload(lzma.decompress(blob)) != tables:
-        sys.exit("self-check failed: blob does not reproduce the source tables")
+    expected = {n: d for n, d in tables.items() if n not in TABLES and n not in EXCLUDE}
+    expected["sbox_19bit_lib_986819"] = tables["sbox_19bit_lib_986819"]
+    expected["child23_ttable_b_ext_976ea8_100000"] = tables["child23_ttable_b_ext_976ea8_100000"]
+    if expand_payload(lzma.decompress(blob)) != expected:
+        sys.exit("self-check failed: blob does not reproduce the exposed tables")
 
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     with open(args.output, "wb") as f:
