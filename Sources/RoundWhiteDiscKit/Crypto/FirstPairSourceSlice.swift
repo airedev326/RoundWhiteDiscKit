@@ -3134,16 +3134,16 @@ public enum FirstPairSourceSlice {
             var bd0State = initBD0
 
             for shift in [24, 16, 8, 0] {
-                let cf0Source = [UInt8](repeating: 0, count: 3)
-                    + [0x05]
-                    + Array(cf0State[0..<8])
-                    + Array(cf0State[8..<12])
-                    + Array(cf0State[12..<14])
-                let bd0Source = [UInt8](repeating: 0, count: 3)
-                    + [0x03]
-                    + Array(bd0State[0..<8])
-                    + Array(bd0State[8..<12])
-                    + Array(bd0State[12..<14])
+                let cf0Source: [UInt8] = [UInt8](repeating: 0, count: 3)
+                    + [UInt8]([0x05])
+                    + [UInt8](cf0State[0..<8])
+                    + [UInt8](cf0State[8..<12])
+                    + [UInt8](cf0State[12..<14])
+                let bd0Source: [UInt8] = [UInt8](repeating: 0, count: 3)
+                    + [UInt8]([0x03])
+                    + [UInt8](bd0State[0..<8])
+                    + [UInt8](bd0State[8..<12])
+                    + [UInt8](bd0State[12..<14])
                 let cf0 = try vm638840(
                     magic: builder633fa8NullPostInitCF0Magic,
                     src1: cf0Source,
