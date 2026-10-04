@@ -32,24 +32,6 @@ public struct PairingHandshakeResult: Sendable {
     public let sharedEphEph: Data
 }
 
-/// Result of running the takeover-mode handshake (Phases 1–6 with cached
-/// kAuth state). On success, the sensor has accepted us as the authorized
-/// peer and we hold all session keys needed for data exchange.
-public struct TakeoverHandshakeResult: Sendable {
-    public let phaseHandshake: PairingHandshakeResult
-    /// Sensor's R1 challenge (16B random) extracted from Phase 4.5 notify.
-    public let sensorR1: Data
-    /// The Phase 5 message we sent (for replay/debug).
-    public let phase5Sent: Phase5Challenge
-    /// Raw 67B Phase 6 body we received from the sensor.
-    public let phase6Raw: Data
-    /// Parsed Phase 6 response (ct56 || tag4 || nonce7).
-    public let phase6: Phase6Response
-    /// Decrypted Phase 6 session material: R2 || R1 || kEnc || ivEnc8.
-    public let sessionMaterial: Phase6SessionMaterial
-    /// The unwrapped kAuth state used to drive this handshake.
-    public let kAuthState: UnwrappedKAuth
-}
 
 /// Result of the command-gated fresh-pair preamble through the sensor's
 /// Phase 10 R1 challenge. This intentionally stops before the Phase 5 phone
@@ -205,50 +187,6 @@ public actor PairingFlow {
         self.eventLogger = eventLogger
     }
 
-    /// Run Phases 1..4. Phase 5+ requires the session-key derivation
-    /// to be pinned down; that work happens in a follow-up.
-    public func runPhases1To4() async throws -> PairingHandshakeResult {
-        guard let phoneCert else {
-            throw PairingFlowError.phoneCertRequired
-        }
-        // Phase 1 — send phone cert (162B; framed into 9× (2B offset + 18B chunk))
-        try await transport.write(phoneCert.raw, to: .certHandshake)
-
-        // Phase 2 — receive 140B sensor cert + parse
-        let sensorCertRaw = try await transport.awaitNotify(on: .certHandshake, exactly: SensorCert.totalSize)
-        let sensorCert = try SensorCert(raw: sensorCertRaw)
-        let sensorCertSigningKeyIndex = try verifySensorCertificate(sensorCert)
-
-        // Phase 3 — send phone ephemeral pubkey (65B). The captured fresh-pair
-        // padded the message to 72B = 4 fragments × 18B; we replicate that so
-        // the wire bytes round-trip.
-        let phase3Wire = padTo(phoneEph.publicKey65, length: 72)
-        try await transport.write(phase3Wire, to: .certHandshake)
-
-        // Phase 4 — receive 65B sensor ephemeral pubkey + ECDH math
-        let sensorEphRaw = try await transport.awaitNotify(on: .certHandshake, exactly: 65)
-        let sensorEphPub = try EphemeralExchange.parsePeerPubkey(sensorEphRaw)
-        let sensorStaticPub = try EphemeralExchange.parsePeerPubkey(sensorCert.staticPub)
-
-        let sharedEphStatic = try EphemeralExchange.sharedSecret(
-            privateKey: phoneEph.privateKey,
-            peer: sensorStaticPub
-        )
-        let sharedEphEph = try EphemeralExchange.sharedSecret(
-            privateKey: phoneEph.privateKey,
-            peer: sensorEphPub
-        )
-
-        return PairingHandshakeResult(
-            phoneCert: phoneCert,
-            sensorCert: sensorCert,
-            sensorCertSigningKeyIndex: sensorCertSigningKeyIndex,
-            phoneEph: phoneEph,
-            sensorEphPub: sensorEphPub,
-            sharedEphStatic: sharedEphStatic,
-            sharedEphEph: sharedEphEph
-        )
-    }
 
     /// Run the command-gated fresh-pair security preamble decoded from
     /// `captures/fresh_pair_2026_04_26/btsnoop_hci.log` and
@@ -764,87 +702,6 @@ public actor PairingFlow {
         return FirstPairDerivedHandshakeResult(handshake: handshake, phase5Material: material)
     }
 
-    /// Run the legacy full takeover handshake using a previously-unwrapped kAuth
-    /// state. Drives Phases 1–6 against the sensor and returns once the
-    /// sensor has issued its Phase 6 verification. This is the entry point
-    /// for "talk to a sensor that's already paired with another phone".
-    ///
-    /// Wire flow:
-    ///  - Phase 1–4: cert exchange + ECDH (existing `runPhases1To4`).
-    ///    NOTE: pristine reconnect captures later showed a shorter cached path;
-    ///    prefer `runCachedReconnectHandshake(...)` when the caller has cached
-    ///    accepted Phase 5 material.
-    ///  - Phase 4.5: receive 23B notify on `.challenge` containing sensor's
-    ///    R1 (16B at offset [0..16] + 4B counter `01000000` + 3B trailing).
-    ///  - Phase 5: AES-CCM-M=4 encrypt `R1 || R2 || tail4`, send 54B.
-    ///  - Phase 6: receive 67B body, decrypt it, and verify echoed R2/R1.
-    ///
-    /// Callers with the raw 149B kAuth blob should pass the child[23]/ptr05
-    /// key from `Child23KAuthImport.phase5RawKey(forKAuthBlob:)`, and should
-    /// pass the persisted sensor `blePIN` as `tail4Provider`. The defaults
-    /// preserve older capture-vector behavior for offline tests.
-    public func runTakeoverHandshake(
-        using kAuthState: UnwrappedKAuth,
-        phase5RawKeyProvider: (UnwrappedKAuth) -> Data = { $0.kEnc },
-        r2Provider: () throws -> Data = defaultPhase5R2,
-        tail4Provider: () -> Data = { Data([0x32, 0x25, 0xec, 0x72]) }
-    ) async throws -> TakeoverHandshakeResult {
-
-        // Phase 1–4 (cert exchange + ECDH) fallback path.
-        let p4 = try await runPhases1To4()
-
-        // Phase 4.5: sensor sends its R1 challenge as a 23B notify.
-        let r1Wire = try await transport.awaitNotify(on: .challenge, exactly: 23)
-        guard r1Wire.count == 23 else {
-            throw PairingFlowError.sensorR1WrongSize(r1Wire.count)
-        }
-        // R1 is the first 16 bytes; bytes [16..20] are counter `01000000`,
-        // bytes [20..23] are protocol trailing.
-        let sensorR1 = r1Wire.subdata(in: 0..<16)
-        let nonce7 = r1Wire.subdata(in: 16..<23)
-
-        let phase5R2 = try r2Provider()
-        guard phase5R2.count == 16 else {
-            throw ChallengeError.wrongPlaintextSize(sensorR1.count + phase5R2.count)
-        }
-        let tail4 = tail4Provider()
-        guard tail4.count == 4 else {
-            throw ChallengeError.wrongPlaintextSize(sensorR1.count + phase5R2.count + tail4.count)
-        }
-        let phase5RawKey = phase5RawKeyProvider(kAuthState)
-        let phase5Plaintext = sensorR1 + phase5R2 + tail4
-        let phase5Block = try LibAES.phase5BlockEncryptor(rawKey: phase5RawKey)
-        let phase5 = try Phase5Challenge.encrypt(
-            plaintext: phase5Plaintext,
-            aes: phase5Block,
-            nonce: nonce7
-        )
-        try await transport.write(phase5.wireBytes, to: .challenge)
-        try await sendChallengeLoadDoneIfAvailable()
-
-        // Phase 6: sensor responds with ct56 || tag4 || nonce7. Decrypt to
-        // R2 || R1 || kEnc || ivEnc8 and verify the challenge echoes before
-        // returning session keys to the caller.
-        let phase6Raw = try await transport.awaitNotify(on: .challenge, exactly: 67)
-        let phase6 = try Phase6Response.decode(phase6Raw)
-        let sessionMaterial = try phase6.decrypt(aes: phase5Block)
-        guard sessionMaterial.phoneR2 == phase5R2 else {
-            throw PairingFlowError.phase6VerificationFailed("Phase 6 R2 echo mismatch")
-        }
-        guard sessionMaterial.sensorR1 == sensorR1 else {
-            throw PairingFlowError.phase6VerificationFailed("Phase 6 R1 echo mismatch")
-        }
-
-        return TakeoverHandshakeResult(
-            phaseHandshake: p4,
-            sensorR1: sensorR1,
-            phase5Sent: phase5,
-            phase6Raw: phase6Raw,
-            phase6: phase6,
-            sessionMaterial: sessionMaterial,
-            kAuthState: kAuthState
-        )
-    }
 }
 
 @inline(__always) func padTo(_ data: Data, length: Int) -> Data {

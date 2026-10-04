@@ -36,7 +36,7 @@ The package contains no data files. Put the original runtime-table `.bin`
 files in `RemoteTables/source/` (git-ignored), then:
 
 ```sh
-Scripts/build_runtime_tables_blob.py   # writes RemoteTables/roundwhitedisckit-runtime-tables-v2.xz
+Scripts/build_runtime_tables_blob.py   # writes RemoteTables/roundwhitedisckit-runtime-tables-v3.xz
 swift test
 ```
 

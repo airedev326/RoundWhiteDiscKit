@@ -39,7 +39,7 @@ public enum RuntimeTablesError: Error, CustomStringConvertible {
 
 extension RoundWhiteDiscKit {
     /// Blob format version this build of RoundWhiteDiscKit accepts.
-    public static let runtimeTablesFormatVersion: UInt32 = 2
+    public static let runtimeTablesFormatVersion: UInt32 = 3
 
     /// Decompresses, reconstructs and verifies the remote runtime tables blob.
     /// Throws without changing state if the blob is invalid. Safe to call again
@@ -56,18 +56,15 @@ extension RoundWhiteDiscKit {
 
 enum RemoteRuntimeTables {
     static let magic = Array("RWDKTBL\0".utf8)
-    static let headerLength = 32
+    static let headerLength = 24
 
     // Offsets must match Scripts/build_runtime_tables_blob.py.
     static let sbox19Prefix = 0x20001
     static let sbox19Length = 0x80000
-    static let sbox12Length = 0x200000
     static let ttableBExtLength = 0x100000
-    static let bytecodeInSbox12 = 0x17F506
-    static let bytecodeLength = 413_696
 
     /// SHA-256 of the decompressed payload, printed by the build script.
-    static let expectedPayloadSHA256 = "0b81a87fa6b1634309f200dc17aaa4fdad626ee67bf078b096a77f292686ccca"
+    static let expectedPayloadSHA256 = "a5bd1e3b2cc5d7ee6717f5eb9d8735a05e30b2fed6039a53be0dd2044040b58b"
 
     private static let lock = NSLock()
     private static var installed: [String: Data]?
@@ -114,11 +111,9 @@ enum RemoteRuntimeTables {
             throw RuntimeTablesError.unsupportedVersion(version)
         }
         let imageLength = Int(u32(p, 12))
-        let vmDescLength = Int(u32(p, 16))
-        let programLength = Int(u32(p, 20))
-        let patchCount = Int(u32(p, 24))
-        let namedCount = Int(u32(p, 28))
-        guard imageLength == sbox19Prefix + sbox12Length else {
+        let patchCount = Int(u32(p, 16))
+        let namedCount = Int(u32(p, 20))
+        guard imageLength == sbox19Prefix + ttableBExtLength else {
             throw RuntimeTablesError.malformed("image length \(imageLength)")
         }
 
@@ -132,15 +127,10 @@ enum RemoteRuntimeTables {
         }
 
         let image = try take(imageLength)
-        let vmDesc = try take(vmDescLength)
-        let program = try take(programLength)
 
         let sbox12Start = image.startIndex + sbox19Prefix
         let sbox19 = image[image.startIndex..<(image.startIndex + sbox19Length)]
-        let sbox12 = image[sbox12Start..<(sbox12Start + sbox12Length)]
-        var ttableBExt = Array(sbox12[sbox12Start..<(sbox12Start + ttableBExtLength)])
-        let bytecodeStart = sbox12Start + bytecodeInSbox12
-        var bytecode = Array(sbox12[bytecodeStart..<(bytecodeStart + bytecodeLength)])
+        var ttableBExt = Array(image[sbox12Start..<(sbox12Start + ttableBExtLength)])
 
         for _ in 0..<patchCount {
             let header = try take(7)
@@ -148,19 +138,12 @@ enum RemoteRuntimeTables {
             let offset = Int(u32(p, header.startIndex + 1))
             let length = Int(p[header.startIndex + 5]) | (Int(p[header.startIndex + 6]) << 8)
             let bytes = try take(length)
-            switch target {
-            case 0: try applyPatch(&ttableBExt, offset, bytes)
-            case 1: try applyPatch(&bytecode, offset, bytes)
-            default: throw RuntimeTablesError.malformed("patch target \(target)")
-            }
+            guard target == 0 else { throw RuntimeTablesError.malformed("patch target \(target)") }
+            try applyPatch(&ttableBExt, offset, bytes)
         }
         var tables: [String: Data] = [
             RuntimeTable.sbox19.rawValue: Data(sbox19),
-            RuntimeTable.sbox12.rawValue: Data(sbox12),
             RuntimeTable.child23TTableBExt.rawValue: Data(ttableBExt),
-            RuntimeTable.bytecode.rawValue: Data(bytecode),
-            RuntimeTable.child23VMDesc.rawValue: Data(vmDesc),
-            RuntimeTable.child23ProgramRegion.rawValue: Data(program),
         ]
         for _ in 0..<namedCount {
             let nameLength = try take(2)
