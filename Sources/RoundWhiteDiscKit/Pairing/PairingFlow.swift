@@ -187,50 +187,6 @@ public actor PairingFlow {
         self.eventLogger = eventLogger
     }
 
-    /// Run Phases 1..4. Phase 5+ requires the session-key derivation
-    /// to be pinned down; that work happens in a follow-up.
-    public func runPhases1To4() async throws -> PairingHandshakeResult {
-        guard let phoneCert else {
-            throw PairingFlowError.phoneCertRequired
-        }
-        // Phase 1 — send phone cert (162B; framed into 9× (2B offset + 18B chunk))
-        try await transport.write(phoneCert.raw, to: .certHandshake)
-
-        // Phase 2 — receive 140B sensor cert + parse
-        let sensorCertRaw = try await transport.awaitNotify(on: .certHandshake, exactly: SensorCert.totalSize)
-        let sensorCert = try SensorCert(raw: sensorCertRaw)
-        let sensorCertSigningKeyIndex = try verifySensorCertificate(sensorCert)
-
-        // Phase 3 — send phone ephemeral pubkey (65B). The captured fresh-pair
-        // padded the message to 72B = 4 fragments × 18B; we replicate that so
-        // the wire bytes round-trip.
-        let phase3Wire = padTo(phoneEph.publicKey65, length: 72)
-        try await transport.write(phase3Wire, to: .certHandshake)
-
-        // Phase 4 — receive 65B sensor ephemeral pubkey + ECDH math
-        let sensorEphRaw = try await transport.awaitNotify(on: .certHandshake, exactly: 65)
-        let sensorEphPub = try EphemeralExchange.parsePeerPubkey(sensorEphRaw)
-        let sensorStaticPub = try EphemeralExchange.parsePeerPubkey(sensorCert.staticPub)
-
-        let sharedEphStatic = try EphemeralExchange.sharedSecret(
-            privateKey: phoneEph.privateKey,
-            peer: sensorStaticPub
-        )
-        let sharedEphEph = try EphemeralExchange.sharedSecret(
-            privateKey: phoneEph.privateKey,
-            peer: sensorEphPub
-        )
-
-        return PairingHandshakeResult(
-            phoneCert: phoneCert,
-            sensorCert: sensorCert,
-            sensorCertSigningKeyIndex: sensorCertSigningKeyIndex,
-            phoneEph: phoneEph,
-            sensorEphPub: sensorEphPub,
-            sharedEphStatic: sharedEphStatic,
-            sharedEphEph: sharedEphEph
-        )
-    }
 
     /// Run the command-gated fresh-pair security preamble decoded from
     /// `captures/fresh_pair_2026_04_26/btsnoop_hci.log` and
