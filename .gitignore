@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+
+# Sensor-specific local state must not be committed to the public repo.
+Libre3PatchContext.xml
+Libre3SensorState.json

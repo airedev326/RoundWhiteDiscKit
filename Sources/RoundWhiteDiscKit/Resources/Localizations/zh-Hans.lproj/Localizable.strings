@@ -1,0 +1,18 @@
+/* RoundWhiteDiscKit — user-facing strings (Simplified Chinese).
+   Chinese has no capitalisation, so the emphasis the English "TOP" carries is
+   rendered lexically with 顶部 and the explicit 紧贴. */
+
+/* --- NFC system sheet --- */
+"Hold the TOP of your iPhone very close to the Sensor" = "请将 iPhone 顶部紧贴传感器";
+"Libre 3 NFC scan complete." = "Libre 3 NFC 扫描完成。";
+"Libre 3 sensor read." = "已读取 Libre 3 传感器。";
+"Libre 3 sensor activated." = "已激活 Libre 3 传感器。";
+"Libre 3 receiver switched." = "已切换 Libre 3 接收器。";
+"More than one tag detected." = "检测到多个标签。";
+
+/* --- Bluetooth errors --- */
+"Bluetooth unavailable" = "蓝牙不可用";
+"Bluetooth powered off" = "蓝牙已关闭";
+"Bluetooth permission denied" = "蓝牙权限被拒绝";
+"BLE connect failed: %@" = "BLE 连接失败：%@";
+"BLE timeout: %@" = "BLE 连接超时：%@";

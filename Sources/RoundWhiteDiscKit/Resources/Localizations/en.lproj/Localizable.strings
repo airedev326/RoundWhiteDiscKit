@@ -1,0 +1,21 @@
+/* RoundWhiteDiscKit — user-facing strings.
+
+   The English source text is the key; translator comments live at the call
+   sites, where genstrings extracts them. Only text an end user actually reads
+   belongs here — diagnostic output stays English so logs remain comparable
+   across locales. */
+
+/* --- NFC system sheet --- */
+"Hold the TOP of your iPhone very close to the Sensor" = "Hold the TOP of your iPhone very close to the Sensor";
+"Libre 3 NFC scan complete." = "Libre 3 NFC scan complete.";
+"Libre 3 sensor read." = "Libre 3 sensor read.";
+"Libre 3 sensor activated." = "Libre 3 sensor activated.";
+"Libre 3 receiver switched." = "Libre 3 receiver switched.";
+"More than one tag detected." = "More than one tag detected.";
+
+/* --- Bluetooth errors --- */
+"Bluetooth unavailable" = "Bluetooth unavailable";
+"Bluetooth powered off" = "Bluetooth powered off";
+"Bluetooth permission denied" = "Bluetooth permission denied";
+"BLE connect failed: %@" = "BLE connect failed: %@";
+"BLE timeout: %@" = "BLE timeout: %@";
