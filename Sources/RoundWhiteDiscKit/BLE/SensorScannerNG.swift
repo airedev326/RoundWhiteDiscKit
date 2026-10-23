@@ -15,7 +15,7 @@ public final class SensorScannerNG: NSObject, @unchecked Sendable {
 
     // MARK: - Events
 
-    public enum Event: @unchecked Sendable {
+    public enum Event {
         case stateChanged(CBManagerState)
         case didDiscover(DiscoveredSensor)
         case didConnect(CBPeripheral)
@@ -321,3 +321,7 @@ extension SensorScannerNG: CBCentralManagerDelegate {
         }
     }
 }
+
+// Declared out of line: SwiftFormat 0.47 cannot parse an attributed
+// conformance in an enum's inheritance clause.
+extension SensorScannerNG.Event: @unchecked Sendable {}
